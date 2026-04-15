@@ -43,13 +43,13 @@ export async function POST(req: Request) {
     sb.from("members").select("display_name").eq("id", session.sub).single(),
     sb
       .from("workout_completions")
-      .select("id, day_index")
+      .select("id, day_index, transferred")
       .eq("member_id", session.sub)
       .eq("week_start", weekIso)
       .order("created_at", { ascending: true }),
     sb
       .from("workout_completions")
-      .select("id, day_index")
+      .select("id, day_index, transferred")
       .eq("member_id", to_member_id)
       .eq("week_start", weekIso),
   ]);
@@ -57,15 +57,18 @@ export async function POST(req: Request) {
   const target = targetRes.data;
   if (!target) return NextResponse.json({ error: "대상을 찾을 수 없습니다." }, { status: 404 });
 
-  const myCompletions = myCompRes.data ?? [];
-  if (myCompletions.length < 2) {
+  // 양도되지 않은 내 기록만 계산
+  const allMyComp = myCompRes.data ?? [];
+  const activeMyCompletions = allMyComp.filter((c) => !c.transferred);
+  if (activeMyCompletions.length < 2) {
     return NextResponse.json(
-      { error: "이번 주 완료 기록이 2개 이상이어야 양도할 수 있습니다." },
+      { error: "이번 주 유효한 완료 기록이 2개 이상이어야 양도할 수 있습니다." },
       { status: 400 },
     );
   }
 
-  const theirCompletions = theirCompRes.data ?? [];
+  // 상대방의 유효한(non-transferred) 기록이 목표 달성했는지 확인
+  const theirCompletions = (theirCompRes.data ?? []).filter((c) => !c.transferred);
   if (theirCompletions.length >= WORKOUT_GOAL_PER_WEEK) {
     return NextResponse.json(
       { error: `${target.display_name}님은 이미 이번 주 목표를 달성했습니다.` },
@@ -73,8 +76,9 @@ export async function POST(req: Request) {
     );
   }
 
-  // 상대방 빈 day_index 찾기
-  const theirDaySet = new Set(theirCompletions.map((c) => c.day_index));
+  // 상대방 빈 day_index 찾기 (transferred 포함 모든 기록 기준으로 슬롯 체크)
+  const theirAllComp = theirCompRes.data ?? [];
+  const theirDaySet = new Set(theirAllComp.map((c) => c.day_index));
   let freeDayIndex: number | null = null;
   for (let i = 0; i <= 6; i++) {
     if (!theirDaySet.has(i)) {
@@ -86,16 +90,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "상대방의 빈 요일 슬롯이 없습니다." }, { status: 400 });
   }
 
-  const toDelete = myCompletions.slice(0, 2);
+  // 내 가장 오래된 유효 기록 2개를 transferred = true로 표시
+  const toMark = activeMyCompletions.slice(0, 2);
 
-  // 내 기록 2개 삭제
-  const { error: deleteError } = await sb
+  const { error: markError } = await sb
     .from("workout_completions")
-    .delete()
-    .in("id", toDelete.map((c) => c.id));
+    .update({ transferred: true })
+    .in("id", toMark.map((c) => c.id));
 
-  if (deleteError) {
-    console.error("[transfer delete]", deleteError);
+  if (markError) {
+    console.error("[transfer mark]", markError);
     return NextResponse.json({ error: "양도 처리 실패" }, { status: 500 });
   }
 

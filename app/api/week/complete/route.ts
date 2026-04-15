@@ -51,17 +51,19 @@ export async function POST(req: Request) {
 
   const { data: existingRows } = await sb
     .from("workout_completions")
-    .select("id, day_index, photo_path")
+    .select("id, day_index, photo_path, transferred")
     .eq("member_id", session.sub)
     .eq("week_start", weekIso);
 
   const rows = existingRows ?? [];
   const existingForDay = rows.find((r) => r.day_index === dayIndex);
-  const count = rows.length;
+  // non-transferred 기록 수 (목표 달성 푸시용)
+  const count = rows.filter((r) => !r.transferred).length;
 
-  if (!existingForDay && count >= WORKOUT_GOAL_PER_WEEK) {
+  // 양도된 기록은 수정 불가
+  if (existingForDay?.transferred) {
     return NextResponse.json(
-      { error: `이번 주는 최대 ${WORKOUT_GOAL_PER_WEEK}회까지만 기록할 수 있습니다.` },
+      { error: "양도된 기록은 수정할 수 없습니다." },
       { status: 400 },
     );
   }
@@ -208,7 +210,7 @@ export async function DELETE(req: Request) {
 
   const { data: row } = await sb
     .from("workout_completions")
-    .select("id, photo_path")
+    .select("id, photo_path, transferred")
     .eq("member_id", session.sub)
     .eq("week_start", weekIso)
     .eq("day_index", parsed.data.day_index)
@@ -216,6 +218,14 @@ export async function DELETE(req: Request) {
 
   if (!row) {
     return NextResponse.json({ error: "삭제할 기록이 없습니다." }, { status: 404 });
+  }
+
+  // 양도된 기록은 취소 불가
+  if (row.transferred) {
+    return NextResponse.json(
+      { error: "양도된 기록은 취소할 수 없습니다." },
+      { status: 400 },
+    );
   }
 
   await sb.from("workout_completions").delete().eq("id", row.id);

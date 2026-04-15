@@ -18,6 +18,7 @@ type DayCompletion = {
   id: string;
   dayIndex: number;
   photoUrl: string | null;
+  transferred: boolean;
   createdAt: string;
 };
 
@@ -224,6 +225,11 @@ export default function CheckClient() {
     }
     if (!me || busy) return;
     const hit = me.days.find((d) => d.dayIndex === dayIndex);
+    // 양도된 기록은 취소 불가
+    if (hit?.transferred) {
+      showToast("양도한 기록은 취소할 수 없어요.", "info");
+      return;
+    }
     void toggleDay(dayIndex, Boolean(hit));
   }
 
@@ -386,6 +392,7 @@ export default function CheckClient() {
                 const inActiveWeek = keyToDayIndex.has(cell.dateKey);
                 const dayIndex = keyToDayIndex.get(cell.dateKey);
                 const hit = dayIndex !== undefined ? me.days.find((d) => d.dayIndex === dayIndex) : undefined;
+                const isTransferred = hit?.transferred === true;
                 const isToday = todayKey !== "" && cell.dateKey === todayKey;
                 const canTapWeek = inActiveWeek && editable && !busy;
 
@@ -397,10 +404,16 @@ export default function CheckClient() {
                 else cellClass += " text-stone-600";
 
                 if (inActiveWeek) {
-                  cellClass += hit
-                    ? " border-2 border-indigo-600 bg-indigo-600 text-white shadow-sm"
-                    : " border-2 border-indigo-400 bg-indigo-50/70 text-indigo-700";
-                  if (canTapWeek) cellClass += " cursor-pointer active:scale-[0.93]";
+                  if (isTransferred) {
+                    // 양도된 날: 회색 테두리 + 취소선
+                    cellClass += " border-2 border-stone-300 bg-stone-100 text-stone-400 line-through decoration-stone-300";
+                    if (canTapWeek) cellClass += " cursor-pointer active:scale-[0.93]";
+                  } else if (hit) {
+                    cellClass += " border-2 border-indigo-600 bg-indigo-600 text-white shadow-sm cursor-pointer active:scale-[0.93]";
+                  } else {
+                    cellClass += " border-2 border-indigo-400 bg-indigo-50/70 text-indigo-700";
+                    if (canTapWeek) cellClass += " cursor-pointer active:scale-[0.93]";
+                  }
                 } else {
                   cellClass += hit
                     ? " border border-stone-200 bg-stone-100 text-stone-500 line-through decoration-stone-300"
@@ -417,20 +430,24 @@ export default function CheckClient() {
                       className={`${cellClass} cursor-pointer`}
                       aria-label={
                         inActiveWeek
-                          ? `${cell.m}월 ${cell.d}일 ${hit ? "운동 기록 취소" : "운동 완료 기록"}`
+                          ? isTransferred
+                            ? `${cell.m}월 ${cell.d}일 양도됨`
+                            : `${cell.m}월 ${cell.d}일 ${hit ? "운동 기록 취소" : "운동 완료 기록"}`
                           : `${cell.m}월 ${cell.d}일`
                       }
                     >
                       <span>{cell.d}</span>
-                      {inActiveWeek && hit?.photoUrl ? (
+                      {isTransferred ? (
+                        <span className="mt-0.5 text-[8px] leading-none text-stone-400">양도</span>
+                      ) : inActiveWeek && hit?.photoUrl ? (
                         <span className="mt-0.5 h-1 w-1 rounded-full bg-sky-300" title="사진 있음" />
                       ) : (
                         <span className="h-1" />
                       )}
                     </button>
 
-                    {/* 사진 버튼 — 터치 영역 확대 */}
-                    {inActiveWeek && dayIndex !== undefined && canTapWeek && hit ? (
+                    {/* 사진 버튼 — 양도되지 않은 체크된 날만 */}
+                    {inActiveWeek && dayIndex !== undefined && canTapWeek && hit && !isTransferred ? (
                       <>
                         <input
                           ref={(el) => { fileInputs.current[dayIndex] = el; }}
@@ -454,7 +471,8 @@ export default function CheckClient() {
                       </>
                     ) : null}
 
-                    {inActiveWeek && dayIndex !== undefined && canTapWeek && !hit && me.completionCount < goal ? (
+                    {/* +사진 버튼 — 체크 안 된 날 (3회 초과도 가능) */}
+                    {inActiveWeek && dayIndex !== undefined && canTapWeek && !hit ? (
                       <>
                         <input
                           ref={(el) => { fileInputs.current[100 + dayIndex] = el; }}

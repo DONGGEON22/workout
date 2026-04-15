@@ -9,6 +9,7 @@ type DayCompletion = {
   id: string;
   dayIndex: number;
   photoUrl: string | null;
+  transferred: boolean;
   createdAt: string;
 };
 
@@ -712,6 +713,7 @@ export default function HomeClient() {
                   <div className="grid grid-cols-7 divide-x divide-stone-200/60">
                     {dayCells.map((c) => {
                       const hit = m.days.find((d) => d.dayIndex === c.dayIndex);
+                      const isTransferred = hit?.transferred === true;
                       return (
                         <div key={c.dayIndex} className="flex min-w-0 flex-col items-center gap-1 px-0.5 py-0.5 first:pl-0 last:pr-0">
                           <span className="text-[10px] font-medium leading-none text-stone-400">{c.label}</span>
@@ -719,8 +721,16 @@ export default function HomeClient() {
                             {c.dateLabel}
                           </span>
                           {c.isToday ? <span className="h-1 w-1 shrink-0 rounded-full bg-indigo-500" /> : <span className="h-1 shrink-0" />}
-                          <div className={`relative mt-0.5 flex h-10 w-full max-w-[2.85rem] shrink-0 items-center justify-center rounded-lg sm:h-11 sm:max-w-[3rem] ${hit ? "bg-indigo-100" : "border border-stone-100 bg-stone-50"}`}>
-                            {hit?.photoUrl ? (
+                          <div className={`relative mt-0.5 flex h-10 w-full max-w-[2.85rem] shrink-0 items-center justify-center rounded-lg sm:h-11 sm:max-w-[3rem] ${
+                            isTransferred
+                              ? "border border-stone-200 bg-stone-100"
+                              : hit
+                                ? "bg-indigo-100"
+                                : "border border-stone-100 bg-stone-50"
+                          }`}>
+                            {isTransferred ? (
+                              <span className="text-[9px] font-medium text-stone-400">양도</span>
+                            ) : hit?.photoUrl ? (
                               <a
                                 href={hit.photoUrl}
                                 target="_blank"

@@ -50,7 +50,7 @@ export async function GET() {
       sb.from("members").select("id, display_name, created_at").order("display_name"),
       sb
         .from("workout_completions")
-        .select("id, member_id, week_start, day_index, photo_path, created_at")
+        .select("id, member_id, week_start, day_index, photo_path, transferred, created_at")
         .eq("week_start", weekIso),
       sb
         .from("reactions")
@@ -72,7 +72,7 @@ export async function GET() {
   // 완료 기록 멤버별 그룹화
   const byMember = new Map<
     string,
-    Array<{ id: string; dayIndex: number; photoUrl: string | null; createdAt: string }>
+    Array<{ id: string; dayIndex: number; photoUrl: string | null; transferred: boolean; createdAt: string }>
   >();
 
   for (const row of completions) {
@@ -86,6 +86,7 @@ export async function GET() {
       id: row.id,
       dayIndex: row.day_index,
       photoUrl,
+      transferred: row.transferred ?? false,
       createdAt: row.created_at,
     });
     byMember.set(row.member_id, list);
@@ -126,12 +127,14 @@ export async function GET() {
 
   const payload = members.map((m) => {
     const days = byMember.get(m.id) ?? [];
+    // transferred된 기록은 횟수에서 제외 (양도한 건 인정하지만 카운트 X)
+    const activeCount = days.filter((d) => !d.transferred).length;
     return {
       id: m.id,
       displayName: m.display_name,
       createdAt: m.created_at,
-      completionCount: days.length,
-      metGoal: days.length >= WORKOUT_GOAL_PER_WEEK,
+      completionCount: activeCount,
+      metGoal: activeCount >= WORKOUT_GOAL_PER_WEEK,
       streak: streakMap.get(m.id) ?? 0,
       days,
       reactions: reactionsByTarget[m.id] ?? [],

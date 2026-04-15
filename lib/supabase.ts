@@ -33,6 +33,7 @@ export interface Database {
           week_start: string;
           day_index: number;
           photo_path: string | null;
+          transferred: boolean;
           created_at: string;
         };
         Insert: {
@@ -41,6 +42,7 @@ export interface Database {
           week_start: string;
           day_index: number;
           photo_path?: string | null;
+          transferred?: boolean;
           created_at?: string;
         };
         Update: {
@@ -49,6 +51,7 @@ export interface Database {
           week_start?: string;
           day_index?: number;
           photo_path?: string | null;
+          transferred?: boolean;
           created_at?: string;
         };
         Relationships: [

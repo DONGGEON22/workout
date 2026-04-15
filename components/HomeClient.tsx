@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { buildWeekDayCells } from "@/lib/calendar-display";
+import { useToast, ToastContainer } from "@/components/Toast";
 
 type DayCompletion = {
   id: string;
@@ -60,7 +61,6 @@ function formatDeadline(weekEnd: string) {
   });
 }
 
-/** VAPID public key → Uint8Array */
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -68,7 +68,19 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
 }
 
-/** 화면 중앙에 떠오르는 이펙트 */
+function Spinner({ small }: { small?: boolean }) {
+  return (
+    <svg
+      className={`animate-spin text-current ${small ? "h-3.5 w-3.5" : "h-5 w-5 text-indigo-400"}`}
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+    </svg>
+  );
+}
+
 function FloatEffect({ emoji, id, onDone }: { emoji: string; id: number; onDone: () => void }) {
   useEffect(() => {
     const t = setTimeout(onDone, 1200);
@@ -81,17 +93,13 @@ function FloatEffect({ emoji, id, onDone }: { emoji: string; id: number; onDone:
       className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center"
       aria-hidden
     >
-      <span
-        className="animate-bounce-up text-5xl"
-        style={{ animation: "floatUp 1.2s ease-out forwards" }}
-      >
+      <span className="text-5xl" style={{ animation: "floatUp 1.2s ease-out forwards" }}>
         {emoji}
       </span>
     </div>
   );
 }
 
-/** 양도 받을 때 특수 이펙트 */
 function TransferReceiveEffect({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     const t = setTimeout(onDone, 2000);
@@ -101,8 +109,10 @@ function TransferReceiveEffect({ onDone }: { onDone: () => void }) {
   return (
     <div className="pointer-events-none fixed inset-0 z-50 flex flex-col items-center justify-center gap-3" aria-hidden>
       <span className="text-6xl" style={{ animation: "floatUp 2s ease-out forwards" }}>💝</span>
-      <span className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg"
-        style={{ animation: "fadeInOut 2s ease-out forwards" }}>
+      <span
+        className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg"
+        style={{ animation: "fadeInOut 2s ease-out forwards" }}
+      >
         운동 1회 양도 받음!
       </span>
     </div>
@@ -111,6 +121,7 @@ function TransferReceiveEffect({ onDone }: { onDone: () => void }) {
 
 export default function HomeClient() {
   const router = useRouter();
+  const { toasts, showToast } = useToast();
   const [week, setWeek] = useState<WeekPayload | null>(null);
   const [notices, setNotices] = useState<NoticeItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -133,10 +144,8 @@ export default function HomeClient() {
     if (!res.ok) { setLoadError(typeof data.error === "string" ? data.error : "불러오기 실패"); return; }
     setLoadError(null);
     setWeek((prev) => {
-      // 내가 양도받은 경우 감지
       if (prev && data.transfers) {
         const myId = data.currentMemberId;
-        const prevCount = prev.transfers?.filter((t: TransferRow) => t.to_member_id === myId).length ?? 0;
         const newCount = data.transfers.filter((t: TransferRow) => t.to_member_id === myId).length;
         if (prevTransferCount.current !== null && newCount > prevTransferCount.current) {
           setShowTransferEffect(true);
@@ -172,7 +181,6 @@ export default function HomeClient() {
     return () => { window.clearTimeout(boot); window.clearInterval(id); };
   }, []);
 
-  // 푸시 알림 구독 상태 확인
   useEffect(() => {
     async function checkPush() {
       if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
@@ -185,7 +193,6 @@ export default function HomeClient() {
     void checkPush();
   }, []);
 
-  // 커스텀 push 핸들러 Service Worker 등록
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
     navigator.serviceWorker.register("/sw-push.js", { scope: "/" }).catch(() => {});
@@ -193,7 +200,7 @@ export default function HomeClient() {
 
   async function togglePush() {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      alert("이 브라우저는 푸시 알림을 지원하지 않습니다.");
+      showToast("이 브라우저는 푸시 알림을 지원하지 않아요.", "error");
       return;
     }
     setPushLoading(true);
@@ -210,11 +217,15 @@ export default function HomeClient() {
           await sub.unsubscribe();
         }
         setPushEnabled(false);
+        showToast("알림을 껐습니다.", "info");
       } else {
         const permission = await Notification.requestPermission();
-        if (permission !== "granted") { alert("알림 권한이 필요합니다."); return; }
+        if (permission !== "granted") {
+          showToast("알림 권한이 필요합니다.", "error");
+          return;
+        }
         const keyRes = await fetch("/api/push/vapid-public-key");
-        if (!keyRes.ok) { alert("서버 설정 오류"); return; }
+        if (!keyRes.ok) { showToast("서버 설정 오류", "error"); return; }
         const { key } = await keyRes.json();
         const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
@@ -226,10 +237,11 @@ export default function HomeClient() {
           body: JSON.stringify(sub.toJSON()),
         });
         setPushEnabled(true);
+        showToast("🔔 알림이 켜졌어요!", "success");
       }
     } catch (e) {
       console.error("[push toggle]", e);
-      alert("알림 설정에 실패했습니다.");
+      showToast("알림 설정에 실패했습니다.", "error");
     } finally {
       setPushLoading(false);
     }
@@ -266,10 +278,6 @@ export default function HomeClient() {
     if (transferBusy) return;
     const target = week?.members.find((m) => m.id === toMemberId);
     if (!target) return;
-    const ok = confirm(
-      `${target.displayName}님에게 운동 1회를 양도합니다.\n내 운동 기록 2회가 차감됩니다. 계속하시겠어요?`,
-    );
-    if (!ok) return;
     setTransferBusy(true);
     try {
       const res = await fetch("/api/transfer", {
@@ -278,8 +286,11 @@ export default function HomeClient() {
         body: JSON.stringify({ to_member_id: toMemberId }),
       });
       const data = await res.json();
-      if (!res.ok) { alert(data.error ?? "양도 실패"); return; }
-      // 주는 이펙트
+      if (!res.ok) {
+        showToast(data.error ?? "양도 실패", "error");
+        return;
+      }
+      showToast(`${target.displayName}님에게 1회 양도했어요! 💝`, "success");
       const id = ++effectId.current;
       setFloatEffects((p) => [...p, { emoji: "💝", id }]);
       await loadWeek();
@@ -289,8 +300,7 @@ export default function HomeClient() {
     }
   }
 
-  const editable = !week || nowMs === 0 ? true : nowMs < new Date(week.weekEnd).getTime();
-
+  const editable = nowMs === 0 ? false : !week || nowMs < new Date(week.weekEnd).getTime();
   const dayCells = useMemo(() => (week ? buildWeekDayCells(week.weekStart) : []), [week]);
 
   const sortedMembers = useMemo(() => {
@@ -311,24 +321,22 @@ export default function HomeClient() {
     router.refresh();
   }
 
-  /** 나가기 버튼 클릭 → 확인 모달 표시 */
-  function handleLogoutClick() {
-    setShowLogoutConfirm(true);
-  }
-
   if (loadError && !week) {
     return (
       <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6">
         <p className="text-center text-sm text-red-500">{loadError}</p>
-        <button type="button" className="mt-6 text-center text-sm text-indigo-600 underline underline-offset-4" onClick={() => void loadWeek()}>다시 시도</button>
+        <button type="button" className="mt-6 text-center text-sm text-indigo-600 underline underline-offset-4" onClick={() => void loadWeek()}>
+          다시 시도
+        </button>
       </div>
     );
   }
 
-  if (!week) {
+  if (!week || nowMs === 0) {
     return (
-      <div className="flex min-h-dvh items-center justify-center">
-        <p className="text-sm tracking-wide text-stone-400">불러오는 중</p>
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-3">
+        <Spinner />
+        <p className="text-sm tracking-wide text-stone-400">불러오는 중…</p>
       </div>
     );
   }
@@ -338,6 +346,8 @@ export default function HomeClient() {
 
   return (
     <>
+      <ToastContainer toasts={toasts} />
+
       {/* 나가기 확인 모달 */}
       {showLogoutConfirm && (
         <div
@@ -407,13 +417,15 @@ export default function HomeClient() {
             <h1 className="mt-2 text-2xl font-semibold tracking-tight text-stone-900">운동 좀 하슝!</h1>
             <p className="mt-2 text-sm leading-relaxed tracking-wide text-stone-500">
               마감 {formatDeadline(week.weekEnd)}
-              {!editable ? <span className="ml-1.5 rounded-md bg-stone-100 px-1.5 py-0.5 text-xs font-medium text-stone-500">기록 마감</span> : null}
+              {!editable ? (
+                <span className="ml-1.5 rounded-md bg-stone-100 px-1.5 py-0.5 text-xs font-medium text-stone-500">기록 마감</span>
+              ) : null}
             </p>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2">
             <button
               type="button"
-              onClick={handleLogoutClick}
+              onClick={() => setShowLogoutConfirm(true)}
               className="rounded-full px-3 py-2 text-sm text-stone-400 transition hover:bg-stone-100 hover:text-stone-700"
             >
               나가기
@@ -422,12 +434,13 @@ export default function HomeClient() {
               type="button"
               onClick={() => void togglePush()}
               disabled={pushLoading}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition disabled:opacity-60 ${
                 pushEnabled
                   ? "bg-indigo-100 text-indigo-700 hover:bg-indigo-200"
                   : "bg-stone-100 text-stone-500 hover:bg-stone-200"
               }`}
             >
+              {pushLoading ? <Spinner small /> : null}
               {pushEnabled ? "🔔 알림 ON" : "🔕 알림 OFF"}
             </button>
           </div>
@@ -459,7 +472,7 @@ export default function HomeClient() {
               return (
                 <li key={m.id}>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="flex items-center gap-2 text-sm font-medium tracking-tight text-stone-900">
+                    <span className="flex flex-wrap items-center gap-2 text-sm font-medium tracking-tight text-stone-900">
                       {m.displayName}
                       {isMe ? (
                         <span className="rounded-md bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600">나</span>
@@ -470,7 +483,7 @@ export default function HomeClient() {
                         </span>
                       ) : null}
                     </span>
-                    <span className="tabular-nums text-sm text-stone-500">
+                    <span className="shrink-0 tabular-nums text-sm text-stone-500">
                       <span className={`font-semibold ${m.metGoal ? "text-emerald-600" : "text-stone-900"}`}>{m.completionCount}</span>
                       회 / {goal}회
                       {m.metGoal ? <span className="ml-1 text-emerald-500">✓</span> : null}
@@ -486,8 +499,8 @@ export default function HomeClient() {
 
                   {/* 리액션 + 양도 버튼 */}
                   {!isMe ? (
-                    <div className="mt-2 flex items-center gap-2 flex-wrap">
-                      <div className="flex items-center gap-1">
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         {EMOJIS.map((emoji) => {
                           const r = m.reactions.find((x) => x.emoji === emoji);
                           return (
@@ -496,13 +509,16 @@ export default function HomeClient() {
                               type="button"
                               disabled={reactionBusy}
                               onClick={() => void sendReaction(m.id, emoji, r?.iMine ?? false)}
-                              className={`flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs transition ${
+                              className={`flex min-h-[2.25rem] min-w-[2.25rem] items-center justify-center gap-0.5 rounded-full px-2.5 py-1.5 text-sm transition active:scale-95 disabled:opacity-50 ${
                                 r?.iMine
-                                  ? "bg-indigo-100 text-indigo-700 font-semibold"
-                                  : "bg-stone-100 text-stone-500 hover:bg-stone-200"
+                                  ? "bg-indigo-100 text-indigo-700 font-semibold ring-1 ring-indigo-300"
+                                  : "bg-stone-100 text-stone-600 hover:bg-stone-200"
                               }`}
                             >
-                              {emoji}{r && r.count > 0 ? <span className="tabular-nums">{r.count}</span> : null}
+                              {emoji}
+                              {r && r.count > 0 ? (
+                                <span className="text-xs tabular-nums">{r.count}</span>
+                              ) : null}
                             </button>
                           );
                         })}
@@ -510,19 +526,20 @@ export default function HomeClient() {
 
                       {canTransfer ? (
                         transferTarget === m.id ? (
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1.5">
                             <button
                               type="button"
                               disabled={transferBusy}
                               onClick={() => void doTransfer(m.id)}
-                              className="rounded-full bg-indigo-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+                              className="flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-50"
                             >
+                              {transferBusy ? <Spinner small /> : null}
                               {transferBusy ? "처리 중…" : "양도 확인"}
                             </button>
                             <button
                               type="button"
                               onClick={() => setTransferTarget(null)}
-                              className="rounded-full bg-stone-100 px-2.5 py-1 text-[11px] text-stone-500"
+                              className="rounded-full bg-stone-100 px-3 py-1.5 text-xs text-stone-500 transition hover:bg-stone-200"
                             >
                               취소
                             </button>
@@ -531,7 +548,7 @@ export default function HomeClient() {
                           <button
                             type="button"
                             onClick={() => setTransferTarget(m.id)}
-                            className="rounded-full border border-dashed border-indigo-300 px-2.5 py-1 text-[11px] font-medium text-indigo-500 hover:bg-indigo-50"
+                            className="rounded-full border border-dashed border-indigo-300 px-3 py-1.5 text-xs font-medium text-indigo-500 transition hover:bg-indigo-50 active:scale-95"
                           >
                             💝 양도
                           </button>
@@ -550,7 +567,10 @@ export default function HomeClient() {
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-stone-400">이번 주 양도 이력</p>
               <ul className="space-y-1">
                 {week.transfers.map((t) => (
-                  <li key={t.created_at} className="text-xs text-stone-500">
+                  <li
+                    key={`${t.from_member_id}-${t.to_member_id}-${t.created_at}`}
+                    className="text-xs text-stone-500"
+                  >
                     <span className="font-medium text-stone-700">{t.from_name}</span>
                     {" → "}
                     <span className="font-medium text-stone-700">{t.to_name}</span>
@@ -577,9 +597,11 @@ export default function HomeClient() {
               {sortedMembers.map((m) => (
                 <div
                   key={m.id}
-                  className={m.id === week.currentMemberId
-                    ? "rounded-xl bg-white px-1.5 py-2 shadow-sm ring-1 ring-stone-200/80"
-                    : "px-1 py-1 sm:px-1.5"}
+                  className={
+                    m.id === week.currentMemberId
+                      ? "rounded-xl bg-white px-1.5 py-2 shadow-sm ring-1 ring-stone-200/80"
+                      : "px-1 py-1 sm:px-1.5"
+                  }
                 >
                   <div className="mb-2 flex items-center justify-between px-0.5">
                     <span className="text-sm font-medium tracking-tight text-stone-800">{m.displayName}</span>
@@ -599,7 +621,13 @@ export default function HomeClient() {
                           {c.isToday ? <span className="h-1 w-1 shrink-0 rounded-full bg-indigo-500" /> : <span className="h-1 shrink-0" />}
                           <div className={`relative mt-0.5 flex h-10 w-full max-w-[2.85rem] shrink-0 items-center justify-center rounded-lg sm:h-11 sm:max-w-[3rem] ${hit ? "bg-indigo-100" : "border border-stone-100 bg-stone-50"}`}>
                             {hit?.photoUrl ? (
-                              <a href={hit.photoUrl} target="_blank" rel="noreferrer" className="absolute inset-0 flex items-center justify-center rounded-lg hover:bg-indigo-200/50" aria-label="사진 보기">
+                              <a
+                                href={hit.photoUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="absolute inset-0 flex items-center justify-center rounded-lg hover:bg-indigo-200/50"
+                                aria-label="사진 보기"
+                              >
                                 <span className="text-xs font-semibold text-indigo-600">✓</span>
                                 <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-sky-400" />
                               </a>
@@ -620,10 +648,10 @@ export default function HomeClient() {
         </section>
 
         {/* 기록·커피 */}
-        <section className="mt-8 pb-4">
+        <section className="mt-8 pb-8">
           <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-400">기록 · 커피</h2>
           {notices.length === 0 ? (
-            <p className="mt-3 text-sm text-stone-400">아직 스냅샷이 없습니다.</p>
+            <p className="mt-3 text-sm text-stone-400">주간 마감 후 여기에 기록이 쌓여요.</p>
           ) : (
             <ul className="mt-3 space-y-2">
               {notices.map((n) => (

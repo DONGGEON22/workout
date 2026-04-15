@@ -17,6 +17,14 @@
 /.next/
 /out/
 
+# next-pwa 빌드 산출물 (Vercel 빌드 시 자동 생성)
+/public/sw.js
+/public/sw.js.map
+/public/workbox-*.js
+/public/workbox-*.js.map
+/public/fallback-*.js
+/public/fallback-*.js.map
+
 # production
 /build
 

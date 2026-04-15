@@ -119,6 +119,8 @@ function TransferReceiveEffect({ onDone }: { onDone: () => void }) {
   );
 }
 
+const FEEDBACK_TYPES = ["기능 요청", "버그 신고", "UI 개선", "기타"] as const;
+
 export default function HomeClient() {
   const router = useRouter();
   const { toasts, showToast } = useToast();
@@ -129,6 +131,10 @@ export default function HomeClient() {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackType, setFeedbackType] = useState<string>("기능 요청");
+  const [feedbackContent, setFeedbackContent] = useState("");
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
   const [floatEffects, setFloatEffects] = useState<Array<{ emoji: string; id: number }>>([]);
   const [showTransferEffect, setShowTransferEffect] = useState(false);
   const [transferTarget, setTransferTarget] = useState<string | null>(null);
@@ -300,6 +306,26 @@ export default function HomeClient() {
     }
   }
 
+  async function submitFeedback() {
+    if (!feedbackContent.trim()) { showToast("내용을 입력해주세요.", "error"); return; }
+    setFeedbackBusy(true);
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: feedbackType, content: feedbackContent }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error ?? "전송 실패", "error"); return; }
+      showToast("소중한 의견 감사합니다! 🙏", "success");
+      setShowFeedback(false);
+      setFeedbackContent("");
+      setFeedbackType("기능 요청");
+    } finally {
+      setFeedbackBusy(false);
+    }
+  }
+
   const editable = nowMs === 0 ? false : !week || nowMs < new Date(week.weekEnd).getTime();
   const dayCells = useMemo(() => (week ? buildWeekDayCells(week.weekStart) : []), [week]);
 
@@ -347,6 +373,66 @@ export default function HomeClient() {
   return (
     <>
       <ToastContainer toasts={toasts} />
+
+      {/* 피드백 모달 */}
+      {showFeedback && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-0 backdrop-blur-sm sm:items-center sm:px-6"
+          onClick={() => setShowFeedback(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-3xl bg-white px-6 pb-8 pt-6 shadow-2xl sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-1 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-stone-900">의견 보내기 💬</h3>
+              <button type="button" onClick={() => setShowFeedback(false)} className="rounded-full p-1.5 text-stone-400 hover:bg-stone-100">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <p className="mb-4 text-xs text-stone-400">기능 요청, 버그 신고, UI 개선 아이디어를 알려주세요!</p>
+
+            {/* 유형 선택 */}
+            <div className="mb-3 flex flex-wrap gap-2">
+              {FEEDBACK_TYPES.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setFeedbackType(t)}
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                    feedbackType === t
+                      ? "bg-indigo-600 text-white"
+                      : "bg-stone-100 text-stone-500 hover:bg-stone-200"
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+
+            {/* 내용 입력 */}
+            <textarea
+              value={feedbackContent}
+              onChange={(e) => setFeedbackContent(e.target.value)}
+              placeholder="자유롭게 의견을 남겨주세요..."
+              maxLength={1000}
+              rows={5}
+              className="w-full resize-none rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-800 placeholder-stone-300 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200"
+            />
+            <p className="mt-1 text-right text-xs text-stone-300">{feedbackContent.length}/1000</p>
+
+            <button
+              type="button"
+              disabled={feedbackBusy || feedbackContent.trim().length === 0}
+              onClick={() => void submitFeedback()}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {feedbackBusy ? <Spinner small /> : null}
+              {feedbackBusy ? "전송 중…" : "보내기"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 나가기 확인 모달 */}
       {showLogoutConfirm && (
@@ -423,13 +509,23 @@ export default function HomeClient() {
             </p>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2">
-            <button
-              type="button"
-              onClick={() => setShowLogoutConfirm(true)}
-              className="rounded-full px-3 py-2 text-sm text-stone-400 transition hover:bg-stone-100 hover:text-stone-700"
-            >
-              나가기
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setShowFeedback(true)}
+                className="rounded-full px-3 py-2 text-sm text-stone-400 transition hover:bg-stone-100 hover:text-stone-700"
+                title="의견 보내기"
+              >
+                💬
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(true)}
+                className="rounded-full px-3 py-2 text-sm text-stone-400 transition hover:bg-stone-100 hover:text-stone-700"
+              >
+                나가기
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => void togglePush()}

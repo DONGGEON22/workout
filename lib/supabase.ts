@@ -170,6 +170,41 @@ export interface Database {
           },
         ];
       };
+      feedback: {
+        Row: {
+          id: string;
+          member_id: string;
+          member_name: string;
+          type: string;
+          content: string;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          member_id: string;
+          member_name: string;
+          type?: string;
+          content: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          member_id?: string;
+          member_name?: string;
+          type?: string;
+          content?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "feedback_member_id_fkey";
+            columns: ["member_id"];
+            isOneToOne: false;
+            referencedRelation: "members";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       workout_transfers: {
         Row: {
           id: string;

@@ -41,7 +41,11 @@ export async function POST(req: Request) {
           { status: 409 },
         );
       }
-      throw error;
+      // Supabase 오류 상세 반환 (디버그용)
+      return NextResponse.json(
+        { error: `DB 오류: ${error.message} (code: ${error.code})` },
+        { status: 500 },
+      );
     }
 
     const token = await signSession({ sub: id, name: displayName });

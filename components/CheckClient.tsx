@@ -80,15 +80,19 @@ export default function CheckClient() {
   const fileInputs = useRef<Record<number, HTMLInputElement | null>>({});
 
   const loadWeek = useCallback(async () => {
-    const res = await fetch("/api/week/current", { cache: "no-store" });
-    if (res.status === 401) { router.replace("/login"); return; }
-    const data = await res.json();
-    if (!res.ok) {
-      setLoadError(typeof data.error === "string" ? data.error : "불러오기 실패");
-      return;
+    try {
+      const res = await fetch("/api/week/current", { cache: "no-store" });
+      if (res.status === 401) { router.replace("/login"); return; }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setLoadError(typeof data.error === "string" ? data.error : `서버 오류 (${res.status})`);
+        return;
+      }
+      setLoadError(null);
+      setWeek(data as WeekPayload);
+    } catch {
+      setLoadError("네트워크 오류가 발생했습니다. 다시 시도해주세요.");
     }
-    setLoadError(null);
-    setWeek(data as WeekPayload);
   }, [router]);
 
   useEffect(() => {

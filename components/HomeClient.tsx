@@ -144,10 +144,11 @@ export default function HomeClient() {
   const prevTransferCount = useRef<number | null>(null);
 
   const loadWeek = useCallback(async () => {
+    try {
     const res = await fetch("/api/week/current", { cache: "no-store" });
     if (res.status === 401) { router.replace("/login"); return; }
-    const data = await res.json();
-    if (!res.ok) { setLoadError(typeof data.error === "string" ? data.error : "불러오기 실패"); return; }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { setLoadError(typeof data.error === "string" ? data.error : `서버 오류 (${res.status})`); return; }
     setLoadError(null);
     setWeek((prev) => {
       if (prev && data.transfers) {
@@ -160,6 +161,9 @@ export default function HomeClient() {
       }
       return data as WeekPayload;
     });
+    } catch {
+      setLoadError("네트워크 오류가 발생했습니다. 다시 시도해주세요.");
+    }
   }, [router]);
 
   const loadNotices = useCallback(async () => {

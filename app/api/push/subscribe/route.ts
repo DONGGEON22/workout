@@ -34,16 +34,17 @@ export async function POST(req: Request) {
   }
 
   const sb = getSupabase();
-  const { error } = await sb.from("push_subscriptions").upsert(
-    {
-      id: randomUUID(),
-      member_id: session.sub,
-      endpoint,
-      p256dh: keys.p256dh,
-      auth: keys.auth,
-    },
-    { onConflict: "endpoint" },
-  );
+
+  // 기존 구독 모두 삭제 후 새로 저장 (중복 방지)
+  await sb.from("push_subscriptions").delete().eq("member_id", session.sub);
+
+  const { error } = await sb.from("push_subscriptions").insert({
+    id: randomUUID(),
+    member_id: session.sub,
+    endpoint,
+    p256dh: keys.p256dh,
+    auth: keys.auth,
+  });
 
   if (error) {
     console.error("[push subscribe]", error);

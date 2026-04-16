@@ -218,10 +218,7 @@ export default function HomeClient() {
     void checkPush();
   }, []);
 
-  useEffect(() => {
-    if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("/sw-push.js", { scope: "/" }).catch(() => {});
-  }, []);
+  // sw.js(next-pwa)에 push 핸들러 통합 — 별도 sw-push.js 불필요
 
   useEffect(() => {
     if (localStorage.getItem("install_dismissed")) return;

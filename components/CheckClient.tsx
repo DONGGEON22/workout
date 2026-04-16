@@ -78,7 +78,9 @@ export default function CheckClient() {
   const [viewYm, setViewYm] = useState<{ y: number; m: number } | null>(null);
   const [nowMs, setNowMs] = useState(0);
   const [deleteConfirm, setDeleteConfirm] = useState<{ dayIndex: number } | null>(null);
-  const fileInputs = useRef<Record<number, HTMLInputElement | null>>({});
+  const [photoSheet, setPhotoSheet] = useState<{ dayIndex: number } | null>(null);
+  const galleryInputs = useRef<Record<number, HTMLInputElement | null>>({});
+  const cameraInputs = useRef<Record<number, HTMLInputElement | null>>({});
 
   const loadWeek = useCallback(async () => {
     try {
@@ -312,6 +314,53 @@ export default function CheckClient() {
         </div>
       )}
 
+      {/* 사진 액션시트 */}
+      {photoSheet && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setPhotoSheet(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-2xl bg-white pb-8 pt-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-stone-200" />
+            <p className="mb-3 text-center text-sm font-semibold text-stone-700">사진 추가</p>
+            <div className="flex flex-col gap-2 px-5">
+              <button
+                type="button"
+                className="flex items-center gap-3 rounded-xl bg-stone-50 px-4 py-4 text-sm font-medium text-stone-700 transition active:bg-stone-100"
+                onClick={() => {
+                  galleryInputs.current[photoSheet.dayIndex]?.click();
+                  setPhotoSheet(null);
+                }}
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-lg">🖼️</span>
+                앨범에서 선택
+              </button>
+              <button
+                type="button"
+                className="flex items-center gap-3 rounded-xl bg-stone-50 px-4 py-4 text-sm font-medium text-stone-700 transition active:bg-stone-100"
+                onClick={() => {
+                  cameraInputs.current[photoSheet.dayIndex]?.click();
+                  setPhotoSheet(null);
+                }}
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100 text-lg">📷</span>
+                카메라로 찍기
+              </button>
+              <button
+                type="button"
+                className="mt-1 rounded-xl bg-stone-100 py-3.5 text-sm font-medium text-stone-500 transition active:bg-stone-200"
+                onClick={() => setPhotoSheet(null)}
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mx-auto max-w-md px-5 pt-6">
         <header className="mb-6">
           <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.28em] text-indigo-500">
@@ -446,13 +495,27 @@ export default function CheckClient() {
                       )}
                     </button>
 
-                    {/* 사진 버튼 — 양도되지 않은 체크된 날만 */}
-                    {inActiveWeek && dayIndex !== undefined && canTapWeek && hit && !isTransferred ? (
+                    {/* 사진/+사진 버튼 — 액션시트로 앨범·카메라 선택 */}
+                    {inActiveWeek && dayIndex !== undefined && canTapWeek && (hit && !isTransferred || !hit) ? (
                       <>
+                        {/* 앨범 선택 input */}
                         <input
-                          ref={(el) => { fileInputs.current[dayIndex] = el; }}
+                          ref={(el) => { galleryInputs.current[dayIndex] = el; }}
                           type="file"
                           accept="image/jpeg,image/png,image/webp,image/gif"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            e.target.value = "";
+                            if (f) void submitDayWithPhoto(dayIndex, f);
+                          }}
+                        />
+                        {/* 카메라 input */}
+                        <input
+                          ref={(el) => { cameraInputs.current[dayIndex] = el; }}
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
                           className="hidden"
                           onChange={(e) => {
                             const f = e.target.files?.[0];
@@ -464,34 +527,9 @@ export default function CheckClient() {
                           type="button"
                           disabled={busy}
                           className="min-h-[2rem] w-full text-center text-[10px] font-medium tracking-wide text-indigo-500 underline decoration-indigo-200 underline-offset-2 disabled:opacity-40"
-                          onClick={() => fileInputs.current[dayIndex]?.click()}
+                          onClick={() => setPhotoSheet({ dayIndex })}
                         >
-                          사진
-                        </button>
-                      </>
-                    ) : null}
-
-                    {/* +사진 버튼 — 체크 안 된 날 (3회 초과도 가능) */}
-                    {inActiveWeek && dayIndex !== undefined && canTapWeek && !hit ? (
-                      <>
-                        <input
-                          ref={(el) => { fileInputs.current[100 + dayIndex] = el; }}
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp,image/gif"
-                          className="hidden"
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            e.target.value = "";
-                            if (f) void submitDayWithPhoto(dayIndex, f);
-                          }}
-                        />
-                        <button
-                          type="button"
-                          disabled={busy}
-                          className="min-h-[2rem] w-full text-center text-[10px] font-medium tracking-wide text-indigo-500 underline decoration-indigo-200 underline-offset-2 disabled:opacity-40"
-                          onClick={() => fileInputs.current[100 + dayIndex]?.click()}
-                        >
-                          +사진
+                          {hit ? "사진" : "+사진"}
                         </button>
                       </>
                     ) : null}

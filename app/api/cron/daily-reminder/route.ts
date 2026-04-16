@@ -50,6 +50,17 @@ export async function GET(req: Request) {
   const msLeft = new Date(weekEnd).getTime() - now.getTime();
   const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
 
+  // 성 제거 (3글자 이상이면 첫 글자가 성), 아/야 처리
+  function firstName(name: string) {
+    return name.length >= 3 ? name.slice(1) : name;
+  }
+  function callName(name: string) {
+    const fn = firstName(name);
+    const last = fn.charCodeAt(fn.length - 1);
+    const jongseong = (last - 0xAC00) % 28;
+    return fn + (jongseong === 0 ? "야" : "아");
+  }
+
   const reminded: Array<{ name: string; done: number; remaining: number }> = [];
 
   for (const m of members) {
@@ -79,7 +90,7 @@ export async function GET(req: Request) {
         : `마감까지 ${daysLeft}일이야!`;
 
     await sendPushToMembers([m.id], {
-      title: `오늘 운동 안 했네??? 언제하게 ${m.display_name}아`,
+      title: `오늘 운동 안 했네??? 언제하게 ${callName(m.display_name)}`,
       body: `${remaining}회 남았고 ${daysMsg}`,
       tag: "daily-reminder",
     });

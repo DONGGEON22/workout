@@ -48,7 +48,7 @@ type NoticeItem = {
   missedMembers: { displayName: string; completionCount: number }[];
 };
 
-const EMOJIS = ["👍", "❤️", "💪", "🔥", "🎉"] as const;
+const THUMBS = "👍";
 
 function formatDeadline(weekEnd: string) {
   const t = new Date(weekEnd).getTime() - 1;
@@ -258,26 +258,18 @@ export default function HomeClient() {
     }
   }
 
-  async function sendReaction(toMemberId: string, emoji: string, isMine: boolean) {
+  async function sendReaction(toMemberId: string) {
     if (reactionBusy) return;
     setReactionBusy(true);
     try {
-      if (isMine) {
-        await fetch("/api/reactions", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ to_member_id: toMemberId, emoji }),
-        });
-      } else {
-        const res = await fetch("/api/reactions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ to_member_id: toMemberId, emoji }),
-        });
-        if (res.ok) {
-          const id = ++effectId.current;
-          setFloatEffects((p) => [...p, { emoji, id }]);
-        }
+      const res = await fetch("/api/reactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to_member_id: toMemberId, emoji: THUMBS }),
+      });
+      if (res.ok) {
+        const id = ++effectId.current;
+        setFloatEffects((p) => [...p, { emoji: THUMBS, id }]);
       }
       await loadWeek();
     } finally {
@@ -558,114 +550,157 @@ export default function HomeClient() {
           </div>
         ) : null}
 
-        {/* 팀 현황 + 리액션 + 양도 */}
-        <section className="mb-6 rounded-2xl border border-stone-200/80 bg-white px-4 py-5 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-400">팀 현황</h2>
+        {/* 주간 보기 (팀 현황 + 리액션 + 양도 통합) */}
+        <section className="rounded-2xl border border-stone-200/80 bg-white px-3 py-5 shadow-sm sm:px-4">
+          <div className="mb-3 flex items-center justify-between px-1">
+            <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-400">이번 주</h2>
             <span className="text-[11px] text-stone-400">목표 {goal}회</span>
           </div>
-          <ul className="space-y-5">
-            {sortedMembers.map((m) => {
-              const pct = Math.min(100, (m.completionCount / goal) * 100);
-              const isMe = m.id === week.currentMemberId;
-              const canTransfer = !isMe && editable && (me?.completionCount ?? 0) >= 2 && !m.metGoal;
+          <div className="rounded-xl border border-stone-100 bg-stone-50/60 p-2 sm:p-2.5">
+            <div className="space-y-5">
+              {sortedMembers.map((m) => {
+                const isMe = m.id === week.currentMemberId;
+                const thumbsReaction = m.reactions.find((x) => x.emoji === THUMBS);
+                const thumbsCount = thumbsReaction?.count ?? 0;
+                const canTransfer = !isMe && editable && (me?.completionCount ?? 0) >= 2 && !m.metGoal;
+                const pct = Math.min(100, (m.completionCount / goal) * 100);
 
-              return (
-                <li key={m.id}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="flex flex-wrap items-center gap-2 text-sm font-medium tracking-tight text-stone-900">
-                      {m.displayName}
-                      {isMe ? (
-                        <span className="rounded-md bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600">나</span>
-                      ) : null}
-                      {m.streak > 0 ? (
-                        <span className="flex items-center gap-0.5 rounded-full bg-orange-50 px-1.5 py-0.5 text-[10px] font-bold text-orange-500">
-                          🔥{m.streak}주
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="shrink-0 tabular-nums text-sm text-stone-500">
-                      <span className={`font-semibold ${m.metGoal ? "text-emerald-600" : "text-stone-900"}`}>{m.completionCount}</span>
-                      회 / {goal}회
-                      {m.metGoal ? <span className="ml-1 text-emerald-500">✓</span> : null}
-                    </span>
-                  </div>
-
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-stone-100">
-                    <div
-                      className={`h-full rounded-full transition-[width] duration-500 ${m.metGoal ? "bg-emerald-500" : "bg-indigo-500"}`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-
-                  {/* 리액션 + 양도 버튼 */}
-                  {!isMe ? (
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                return (
+                  <div
+                    key={m.id}
+                    className={
+                      isMe
+                        ? "rounded-xl bg-white px-1.5 py-2.5 shadow-sm ring-1 ring-stone-200/80"
+                        : "px-1 py-1 sm:px-1.5"
+                    }
+                  >
+                    {/* 이름 행: 이름 + 뱃지 + 👍 + 양도 + 회차 */}
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-0.5">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        {EMOJIS.map((emoji) => {
-                          const r = m.reactions.find((x) => x.emoji === emoji);
-                          return (
-                            <button
-                              key={emoji}
-                              type="button"
-                              disabled={reactionBusy}
-                              onClick={() => void sendReaction(m.id, emoji, r?.iMine ?? false)}
-                              className={`flex min-h-[2.25rem] min-w-[2.25rem] items-center justify-center gap-0.5 rounded-full px-2.5 py-1.5 text-sm transition active:scale-95 disabled:opacity-50 ${
-                                r?.iMine
-                                  ? "bg-indigo-100 text-indigo-700 font-semibold ring-1 ring-indigo-300"
-                                  : "bg-stone-100 text-stone-600 hover:bg-stone-200"
-                              }`}
-                            >
-                              {emoji}
-                              {r && r.count > 0 ? (
-                                <span className="text-xs tabular-nums">{r.count}</span>
-                              ) : null}
-                            </button>
-                          );
-                        })}
-                      </div>
+                        <span className="text-sm font-medium tracking-tight text-stone-800">{m.displayName}</span>
+                        {isMe ? (
+                          <span className="rounded-md bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600">나</span>
+                        ) : null}
+                        {m.streak > 0 ? (
+                          <span className="flex items-center gap-0.5 rounded-full bg-orange-50 px-1.5 py-0.5 text-[10px] font-bold text-orange-500">
+                            🔥{m.streak}주
+                          </span>
+                        ) : null}
 
-                      {canTransfer ? (
-                        transferTarget === m.id ? (
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              disabled={transferBusy}
-                              onClick={() => void doTransfer(m.id)}
-                              className="flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-50"
-                            >
-                              {transferBusy ? <Spinner small /> : null}
-                              {transferBusy ? "처리 중…" : "양도 확인"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setTransferTarget(null)}
-                              className="rounded-full bg-stone-100 px-3 py-1.5 text-xs text-stone-500 transition hover:bg-stone-200"
-                            >
-                              취소
-                            </button>
-                          </div>
-                        ) : (
+                        {/* 👍 버튼 — 타인만, 누를수록 카운트 누적 */}
+                        {!isMe ? (
                           <button
                             type="button"
-                            onClick={() => setTransferTarget(m.id)}
-                            className="rounded-full border border-dashed border-indigo-300 px-3 py-1.5 text-xs font-medium text-indigo-500 transition hover:bg-indigo-50 active:scale-95"
+                            disabled={reactionBusy}
+                            onClick={() => void sendReaction(m.id)}
+                            className="flex min-h-[1.75rem] items-center gap-1 rounded-full bg-stone-100 px-2.5 py-1 text-sm font-medium text-stone-600 transition active:scale-95 hover:bg-amber-50 hover:text-amber-600 disabled:opacity-50"
                           >
-                            💝 양도
+                            {THUMBS}
+                            {thumbsCount > 0 ? (
+                              <span className="text-xs tabular-nums text-stone-500">{thumbsCount}</span>
+                            ) : null}
                           </button>
-                        )
-                      ) : null}
+                        ) : null}
+
+                        {/* 💝 양도 버튼 */}
+                        {canTransfer ? (
+                          transferTarget === m.id ? (
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                disabled={transferBusy}
+                                onClick={() => void doTransfer(m.id)}
+                                className="flex items-center gap-1 rounded-full bg-indigo-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                              >
+                                {transferBusy ? <Spinner small /> : null}
+                                {transferBusy ? "처리중" : "확인"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setTransferTarget(null)}
+                                className="rounded-full bg-stone-100 px-2.5 py-1 text-xs text-stone-500 transition hover:bg-stone-200"
+                              >
+                                취소
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setTransferTarget(m.id)}
+                              className="flex min-h-[1.75rem] items-center gap-0.5 rounded-full border border-dashed border-indigo-300 px-2.5 py-1 text-xs font-medium text-indigo-500 transition hover:bg-indigo-50 active:scale-95"
+                            >
+                              💝 양도
+                            </button>
+                          )
+                        ) : null}
+                      </div>
+
+                      {/* 회차 */}
+                      <span className={`shrink-0 text-xs tabular-nums ${m.metGoal ? "font-semibold text-emerald-600" : "text-stone-500"}`}>
+                        {m.completionCount}/{goal}회{m.metGoal ? " ✓" : ""}
+                      </span>
                     </div>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
+
+                    {/* 진행률 바 */}
+                    <div className="mb-2 h-1 overflow-hidden rounded-full bg-stone-100 px-0.5">
+                      <div
+                        className={`h-full rounded-full transition-[width] duration-500 ${m.metGoal ? "bg-emerald-500" : "bg-indigo-500"}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+
+                    {/* 요일 그리드 */}
+                    <div className="grid grid-cols-7 divide-x divide-stone-200/60">
+                      {dayCells.map((c) => {
+                        const hit = m.days.find((d) => d.dayIndex === c.dayIndex);
+                        const isTransferred = hit?.transferred === true;
+                        return (
+                          <div key={c.dayIndex} className="flex min-w-0 flex-col items-center gap-1 px-0.5 py-0.5 first:pl-0 last:pr-0">
+                            <span className="text-[10px] font-medium leading-none text-stone-400">{c.label}</span>
+                            <span className={`text-center text-xs font-semibold tabular-nums leading-tight sm:text-sm ${c.isToday ? "text-stone-900" : "text-stone-500"}`}>
+                              {c.dateLabel}
+                            </span>
+                            {c.isToday ? <span className="h-1 w-1 shrink-0 rounded-full bg-indigo-500" /> : <span className="h-1 shrink-0" />}
+                            <div className={`relative mt-0.5 flex h-10 w-full max-w-[2.85rem] shrink-0 items-center justify-center rounded-lg sm:h-11 sm:max-w-[3rem] ${
+                              isTransferred
+                                ? "border border-stone-200 bg-stone-100"
+                                : hit
+                                  ? "bg-indigo-100"
+                                  : "border border-stone-100 bg-stone-50"
+                            }`}>
+                              {isTransferred ? (
+                                <span className="text-[9px] font-medium text-stone-400">양도</span>
+                              ) : hit?.photoUrl ? (
+                                <a
+                                  href={hit.photoUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="absolute inset-0 flex items-center justify-center rounded-lg hover:bg-indigo-200/50"
+                                  aria-label="사진 보기"
+                                >
+                                  <span className="text-xs font-semibold text-indigo-600">✓</span>
+                                  <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-sky-400" />
+                                </a>
+                              ) : hit ? (
+                                <span className="text-xs font-semibold text-indigo-600">✓</span>
+                              ) : (
+                                <span className="text-[10px] text-stone-300">—</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
           {/* 양도 이력 */}
           {week.transfers.length > 0 ? (
-            <div className="mt-5 border-t border-stone-100 pt-4">
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-stone-400">이번 주 양도 이력</p>
+            <div className="mt-4 border-t border-stone-100 pt-3">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-stone-400">이번 주 양도 이력</p>
               <ul className="space-y-1">
                 {week.transfers.map((t) => (
                   <li
@@ -681,80 +716,6 @@ export default function HomeClient() {
               </ul>
             </div>
           ) : null}
-        </section>
-
-        {/* 양도 안내 */}
-        {editable && (me?.completionCount ?? 0) >= 2 ? (
-          <div className="mb-6 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-xs text-indigo-700">
-            <span className="font-semibold">💝 양도 가능</span> — 팀원에게 운동 1회를 양도할 수 있어요. (내 기록 2회 차감)
-          </div>
-        ) : null}
-
-        {/* 주간 보기 */}
-        <section className="rounded-2xl border border-stone-200/80 bg-white px-3 py-5 shadow-sm sm:px-4">
-          <h2 className="mb-3 px-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-400">주간 보기</h2>
-          <div className="rounded-xl border border-stone-100 bg-stone-50/60 p-2 sm:p-2.5">
-            <div className="space-y-4">
-              {sortedMembers.map((m) => (
-                <div
-                  key={m.id}
-                  className={
-                    m.id === week.currentMemberId
-                      ? "rounded-xl bg-white px-1.5 py-2 shadow-sm ring-1 ring-stone-200/80"
-                      : "px-1 py-1 sm:px-1.5"
-                  }
-                >
-                  <div className="mb-2 flex items-center justify-between px-0.5">
-                    <span className="text-sm font-medium tracking-tight text-stone-800">{m.displayName}</span>
-                    <span className={`text-xs tabular-nums ${m.metGoal ? "font-semibold text-emerald-600" : "text-stone-500"}`}>
-                      {m.completionCount}/{goal}회{m.metGoal ? " ✓" : ""}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-7 divide-x divide-stone-200/60">
-                    {dayCells.map((c) => {
-                      const hit = m.days.find((d) => d.dayIndex === c.dayIndex);
-                      const isTransferred = hit?.transferred === true;
-                      return (
-                        <div key={c.dayIndex} className="flex min-w-0 flex-col items-center gap-1 px-0.5 py-0.5 first:pl-0 last:pr-0">
-                          <span className="text-[10px] font-medium leading-none text-stone-400">{c.label}</span>
-                          <span className={`text-center text-xs font-semibold tabular-nums leading-tight sm:text-sm ${c.isToday ? "text-stone-900" : "text-stone-500"}`}>
-                            {c.dateLabel}
-                          </span>
-                          {c.isToday ? <span className="h-1 w-1 shrink-0 rounded-full bg-indigo-500" /> : <span className="h-1 shrink-0" />}
-                          <div className={`relative mt-0.5 flex h-10 w-full max-w-[2.85rem] shrink-0 items-center justify-center rounded-lg sm:h-11 sm:max-w-[3rem] ${
-                            isTransferred
-                              ? "border border-stone-200 bg-stone-100"
-                              : hit
-                                ? "bg-indigo-100"
-                                : "border border-stone-100 bg-stone-50"
-                          }`}>
-                            {isTransferred ? (
-                              <span className="text-[9px] font-medium text-stone-400">양도</span>
-                            ) : hit?.photoUrl ? (
-                              <a
-                                href={hit.photoUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="absolute inset-0 flex items-center justify-center rounded-lg hover:bg-indigo-200/50"
-                                aria-label="사진 보기"
-                              >
-                                <span className="text-xs font-semibold text-indigo-600">✓</span>
-                                <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-sky-400" />
-                              </a>
-                            ) : hit ? (
-                              <span className="text-xs font-semibold text-indigo-600">✓</span>
-                            ) : (
-                              <span className="text-[10px] text-stone-300">—</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </section>
 
         {/* 기록·커피 */}

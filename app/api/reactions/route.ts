@@ -5,7 +5,7 @@ import { getSupabase } from "@/lib/supabase";
 import { getActiveWeekBounds } from "@/lib/week";
 import { sendPushToMembers } from "@/lib/push";
 
-const ALLOWED_EMOJIS = ["👍", "❤️", "💪", "🔥", "🎉"];
+const ALLOWED_EMOJIS = ["👍"];
 
 export async function GET() {
   const session = await requireSession();
@@ -73,17 +73,14 @@ export async function POST(req: Request) {
     .eq("id", session.sub)
     .single();
 
-  // 중복 무시 (ON CONFLICT DO NOTHING)
-  await sb.from("reactions").upsert(
-    {
-      id: randomUUID(),
-      from_member_id: session.sub,
-      to_member_id,
-      week_start: weekIso,
-      emoji,
-    },
-    { onConflict: "from_member_id,to_member_id,week_start,emoji", ignoreDuplicates: true },
-  );
+  // 누를 때마다 새 행 추가 (카운트 누적)
+  await sb.from("reactions").insert({
+    id: randomUUID(),
+    from_member_id: session.sub,
+    to_member_id,
+    week_start: weekIso,
+    emoji,
+  });
 
   // 받은 사람에게 푸시
   void sendPushToMembers([to_member_id], {

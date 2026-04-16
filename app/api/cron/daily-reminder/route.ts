@@ -75,12 +75,12 @@ export async function GET(req: Request) {
 
     const daysMsg =
       daysLeft <= 1
-        ? "오늘이 마감이에요!"
-        : `마감까지 ${daysLeft}일 남았어요`;
+        ? "오늘이 마감이야!"
+        : `마감까지 ${daysLeft}일이야!`;
 
     await sendPushToMembers([m.id], {
-      title: "💪 오늘 운동 안 하셨어요!",
-      body: `${remaining}회 남았어요. ${daysMsg}`,
+      title: `오늘 운동 안 했네??? 언제하게 ${m.display_name}아`,
+      body: `${remaining}회 남았고 ${daysMsg}`,
       tag: "daily-reminder",
     });
 

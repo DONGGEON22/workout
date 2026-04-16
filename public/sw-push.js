@@ -11,8 +11,8 @@ self.addEventListener("push", (event) => {
     self.registration.showNotification(payload.title, {
       body: payload.body,
       tag: payload.tag ?? "workout",
-      icon: "/icons/icon-192x192.png",
-      badge: "/icons/icon-72x72.png",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
       vibrate: [100, 50, 100],
     }),
   );

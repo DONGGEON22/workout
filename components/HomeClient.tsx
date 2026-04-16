@@ -10,11 +10,17 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: string }>;
 }
 
+const WORKOUT_EMOJI: Record<string, string> = {
+  헬스: "🏋️", 러닝: "🏃", 수영: "🏊", 자전거: "🚴",
+  요가: "🧘", 클라이밍: "🧗", 홈트: "💪", 기타: "⚡",
+};
+
 type DayCompletion = {
   id: string;
   dayIndex: number;
   photoUrl: string | null;
   transferred: boolean;
+  workoutType: string | null;
   createdAt: string;
 };
 
@@ -790,12 +796,18 @@ export default function HomeClient() {
                                 <button
                                   type="button"
                                   onClick={() => setLightboxUrl(hit.photoUrl!)}
-                                  className="absolute inset-0 flex items-center justify-center rounded-lg hover:bg-indigo-200/50"
+                                  className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 rounded-lg hover:bg-indigo-200/50"
                                   aria-label="사진 보기"
                                 >
-                                  <span className="text-xs font-semibold text-indigo-600">✓</span>
+                                  {hit.workoutType ? (
+                                    <span className="text-base leading-none">{WORKOUT_EMOJI[hit.workoutType] ?? "💪"}</span>
+                                  ) : (
+                                    <span className="text-xs font-semibold text-indigo-600">✓</span>
+                                  )}
                                   <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-sky-400" />
                                 </button>
+                              ) : hit?.workoutType ? (
+                                <span className="text-xl leading-none" title={hit.workoutType}>{WORKOUT_EMOJI[hit.workoutType] ?? "💪"}</span>
                               ) : hit ? (
                                 <span className="text-xs font-semibold text-indigo-600">✓</span>
                               ) : (

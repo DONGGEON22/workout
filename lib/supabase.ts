@@ -34,6 +34,7 @@ export interface Database {
           day_index: number;
           photo_path: string | null;
           transferred: boolean;
+          workout_type: string | null;
           created_at: string;
         };
         Insert: {
@@ -43,6 +44,7 @@ export interface Database {
           day_index: number;
           photo_path?: string | null;
           transferred?: boolean;
+          workout_type?: string | null;
           created_at?: string;
         };
         Update: {
@@ -52,6 +54,7 @@ export interface Database {
           day_index?: number;
           photo_path?: string | null;
           transferred?: boolean;
+          workout_type?: string | null;
           created_at?: string;
         };
         Relationships: [

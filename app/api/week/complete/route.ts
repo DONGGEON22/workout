@@ -45,6 +45,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "요일 인덱스가 올바르지 않습니다." }, { status: 400 });
   }
 
+  const ALLOWED_WORKOUT_TYPES = ["헬스", "러닝", "수영", "자전거", "요가", "클라이밍", "홈트", "기타"];
+  const workoutTypeRaw = form.get("workout_type");
+  const workoutType =
+    typeof workoutTypeRaw === "string" && ALLOWED_WORKOUT_TYPES.includes(workoutTypeRaw)
+      ? workoutTypeRaw
+      : null;
+
   const file = form.get("photo");
   const sb = getSupabase();
   const weekIso = weekStart.toISOString();
@@ -113,7 +120,7 @@ export async function POST(req: Request) {
   if (existingForDay) {
     await sb
       .from("workout_completions")
-      .update({ photo_path: photoPath })
+      .update({ photo_path: photoPath, ...(workoutType ? { workout_type: workoutType } : {}) })
       .eq("id", existingForDay.id);
     return NextResponse.json({
       ok: true,
@@ -130,6 +137,7 @@ export async function POST(req: Request) {
     week_start: weekIso,
     day_index: dayIndex,
     photo_path: photoPath,
+    workout_type: workoutType,
   });
 
   if (insertError) {

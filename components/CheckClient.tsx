@@ -14,11 +14,18 @@ import { useToast, ToastContainer } from "@/components/Toast";
 const SEOUL = "Asia/Seoul";
 const WEEK_HEADERS = ["토", "일", "월", "화", "수", "목", "금"] as const;
 
+const WORKOUT_TYPES = ["헬스", "러닝", "수영", "자전거", "요가", "클라이밍", "홈트", "기타"] as const;
+const WORKOUT_EMOJI: Record<string, string> = {
+  헬스: "🏋️", 러닝: "🏃", 수영: "🏊", 자전거: "🚴",
+  요가: "🧘", 클라이밍: "🧗", 홈트: "💪", 기타: "⚡",
+};
+
 type DayCompletion = {
   id: string;
   dayIndex: number;
   photoUrl: string | null;
   transferred: boolean;
+  workoutType: string | null;
   createdAt: string;
 };
 
@@ -79,6 +86,7 @@ export default function CheckClient() {
   const [nowMs, setNowMs] = useState(0);
   const [deleteConfirm, setDeleteConfirm] = useState<{ dayIndex: number } | null>(null);
   const [photoSheet, setPhotoSheet] = useState<{ dayIndex: number } | null>(null);
+  const [workoutSheet, setWorkoutSheet] = useState<{ dayIndex: number } | null>(null);
   const galleryInputs = useRef<Record<number, HTMLInputElement | null>>({});
   const cameraInputs = useRef<Record<number, HTMLInputElement | null>>({});
 
@@ -177,16 +185,25 @@ export default function CheckClient() {
       setDeleteConfirm({ dayIndex });
       return;
     }
+    // 운동 종류 먼저 선택
+    setWorkoutSheet({ dayIndex });
+  }
+
+  async function submitDayWithType(dayIndex: number, workoutType: string, file?: File) {
+    if (!week || !editable || !me) return;
     setBusy(true);
     try {
       const fd = new FormData();
       fd.set("day_index", String(dayIndex));
+      fd.set("workout_type", workoutType);
+      if (file) fd.set("photo", file);
       const res = await fetch("/api/week/complete", { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         showToast(typeof data.error === "string" ? data.error : "기록 실패", "error");
         return;
       }
+      showToast(file ? "사진이 저장됐어요! 📸" : `${WORKOUT_EMOJI[workoutType] ?? "💪"} ${workoutType} 기록 완료!`, "success");
       void celebrate();
       await loadWeek();
     } finally {
@@ -310,6 +327,47 @@ export default function CheckClient() {
                 {busy ? "삭제 중…" : "삭제"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 운동 종류 선택 시트 */}
+      {workoutSheet && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setWorkoutSheet(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-2xl bg-white pb-10 pt-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-stone-200" />
+            <p className="mb-4 text-center text-sm font-semibold text-stone-700">오늘 뭐 했어요?</p>
+            <div className="grid grid-cols-4 gap-2 px-5">
+              {WORKOUT_TYPES.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  disabled={busy}
+                  className="flex flex-col items-center gap-1.5 rounded-xl bg-stone-50 px-2 py-3 text-xs font-medium text-stone-700 transition active:bg-indigo-50 active:text-indigo-700 hover:bg-stone-100 disabled:opacity-50"
+                  onClick={() => {
+                    const idx = workoutSheet.dayIndex;
+                    setWorkoutSheet(null);
+                    void submitDayWithType(idx, type);
+                  }}
+                >
+                  <span className="text-2xl">{WORKOUT_EMOJI[type]}</span>
+                  {type}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="mx-5 mt-3 w-[calc(100%-2.5rem)] rounded-xl bg-stone-100 py-3 text-sm text-stone-500 transition active:bg-stone-200"
+              onClick={() => setWorkoutSheet(null)}
+            >
+              취소
+            </button>
           </div>
         </div>
       )}
@@ -485,9 +543,16 @@ export default function CheckClient() {
                           : `${cell.m}월 ${cell.d}일`
                       }
                     >
-                      <span>{cell.d}</span>
+                      {/* 운동 이모지 or 날짜 */}
+                      {hit && !isTransferred && hit.workoutType ? (
+                        <span className="text-base leading-none">{WORKOUT_EMOJI[hit.workoutType] ?? "💪"}</span>
+                      ) : (
+                        <span>{cell.d}</span>
+                      )}
                       {isTransferred ? (
                         <span className="mt-0.5 text-[8px] leading-none text-stone-400">양도</span>
+                      ) : hit && !isTransferred && hit.workoutType ? (
+                        <span className="text-[8px] leading-none text-indigo-200">{cell.d}</span>
                       ) : inActiveWeek && hit?.photoUrl ? (
                         <span className="mt-0.5 h-1 w-1 rounded-full bg-sky-300" title="사진 있음" />
                       ) : (

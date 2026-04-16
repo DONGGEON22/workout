@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import { buildWeekDayCells } from "@/lib/calendar-display";
 import { useToast, ToastContainer } from "@/components/Toast";
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: string }>;
+}
+
 type DayCompletion = {
   id: string;
   dayIndex: number;
@@ -140,6 +145,9 @@ export default function HomeClient() {
   const [showTransferEffect, setShowTransferEffect] = useState(false);
   const [transferTarget, setTransferTarget] = useState<string | null>(null);
   const [transferBusy, setTransferBusy] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const effectId = useRef(0);
   const prevTransferCount = useRef<number | null>(null);
   const reactionSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -207,6 +215,31 @@ export default function HomeClient() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
     navigator.serviceWorker.register("/sw-push.js", { scope: "/" }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (localStorage.getItem("install_dismissed")) return;
+
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+      setShowInstallBanner(true);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+
+    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isStandalone = "standalone" in window && (window.navigator as Navigator & { standalone?: boolean }).standalone;
+    if (isIos && !isStandalone) {
+      setShowInstallBanner(true);
+    }
+
+    const installedHandler = () => setShowInstallBanner(false);
+    window.addEventListener("appinstalled", installedHandler);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+      window.removeEventListener("appinstalled", installedHandler);
+    };
   }, []);
 
   async function togglePush() {
@@ -479,6 +512,75 @@ export default function HomeClient() {
         </div>
       )}
 
+      {/* 라이트박스 모달 */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/90"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxUrl(null)}
+            className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20"
+            aria-label="닫기"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxUrl}
+            alt="운동 사진"
+            className="max-h-[90dvh] max-w-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+
+      {/* PWA 홈화면 추가 배너 */}
+      {showInstallBanner && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 mx-auto max-w-md bg-white px-5 py-4 shadow-[0_-4px_24px_rgba(0,0,0,0.10)]">
+          <div className="flex items-center justify-between gap-3">
+            {deferredPrompt ? (
+              <div className="flex flex-1 items-center gap-3">
+                <span className="text-sm text-stone-700">📱 홈화면에 추가하면 앱처럼 쓸 수 있어요!</span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!deferredPrompt) return;
+                    await deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    if (outcome === "accepted") setShowInstallBanner(false);
+                    setDeferredPrompt(null);
+                  }}
+                  className="shrink-0 rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-700"
+                >
+                  추가하기
+                </button>
+              </div>
+            ) : (
+              <p className="flex-1 text-sm text-stone-700">
+                📱 Safari에서 공유 → '홈 화면에 추가'를 눌러주세요
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                localStorage.setItem("install_dismissed", "1");
+                setShowInstallBanner(false);
+              }}
+              className="shrink-0 rounded-full p-1.5 text-stone-400 hover:bg-stone-100"
+              aria-label="닫기"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* float 이펙트 */}
       {floatEffects.map((e) => (
         <FloatEffect
@@ -685,16 +787,15 @@ export default function HomeClient() {
                               {isTransferred ? (
                                 <span className="text-[9px] font-medium text-stone-400">양도</span>
                               ) : hit?.photoUrl ? (
-                                <a
-                                  href={hit.photoUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
+                                <button
+                                  type="button"
+                                  onClick={() => setLightboxUrl(hit.photoUrl!)}
                                   className="absolute inset-0 flex items-center justify-center rounded-lg hover:bg-indigo-200/50"
                                   aria-label="사진 보기"
                                 >
                                   <span className="text-xs font-semibold text-indigo-600">✓</span>
                                   <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-sky-400" />
-                                </a>
+                                </button>
                               ) : hit ? (
                                 <span className="text-xs font-semibold text-indigo-600">✓</span>
                               ) : (
@@ -739,14 +840,37 @@ export default function HomeClient() {
             <p className="mt-3 text-sm text-stone-400">주간 마감 후 여기에 기록이 쌓여요.</p>
           ) : (
             <ul className="mt-3 space-y-2">
-              {notices.map((n) => (
-                <li key={n.weekStart} className="rounded-xl border border-stone-200/80 bg-white px-3 py-3 text-sm text-stone-700 shadow-sm">
-                  <p className="text-[11px] text-stone-400">
-                    {new Date(n.weekStart).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}
-                  </p>
-                  <p className="mt-0.5 leading-relaxed">{n.coffeeLine || "—"}</p>
-                </li>
-              ))}
+              {notices.map((n) => {
+                const coffees = n.missedMembers.map((p) => ({
+                  name: p.displayName,
+                  cups: 3 - p.completionCount,
+                })).filter((p) => p.cups > 0);
+                const totalCups = coffees.reduce((sum, p) => sum + p.cups, 0);
+                return (
+                  <li key={n.weekStart} className="rounded-xl border border-stone-200/80 bg-white px-3 py-3 text-sm text-stone-700 shadow-sm">
+                    <p className="text-[11px] text-stone-400">
+                      {new Date(n.weekStart).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}
+                    </p>
+                    {coffees.length > 0 ? (
+                      <>
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {coffees.map((p) => (
+                            <span
+                              key={p.name}
+                              className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200"
+                            >
+                              {p.name} ☕×{p.cups}
+                            </span>
+                          ))}
+                        </div>
+                        <p className="mt-1.5 text-xs font-semibold text-amber-700">총 {totalCups}잔</p>
+                      </>
+                    ) : (
+                      <p className="mt-0.5 leading-relaxed text-stone-500">모두 달성! ☕ 없음</p>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>

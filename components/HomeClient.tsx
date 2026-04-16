@@ -142,6 +142,7 @@ export default function HomeClient() {
   const [transferBusy, setTransferBusy] = useState(false);
   const effectId = useRef(0);
   const prevTransferCount = useRef<number | null>(null);
+  const reactionSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadWeek = useCallback(async () => {
     try {
@@ -280,12 +281,16 @@ export default function HomeClient() {
     const id = ++effectId.current;
     setFloatEffects((p) => [...p, { emoji: THUMBS, id }]);
 
-    // API 호출 (백그라운드, UI 블로킹 없음)
-    fetch("/api/reactions", {
+    // API 호출 (fire-and-forget)
+    void fetch("/api/reactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ to_member_id: toMemberId, emoji: THUMBS }),
-    }).then(() => void loadWeek()).catch(() => void loadWeek());
+    });
+
+    // 마지막 탭 후 1.5초 뒤 한 번만 서버 동기화 (연속 탭 중엔 동기화 안 함)
+    if (reactionSyncTimer.current) clearTimeout(reactionSyncTimer.current);
+    reactionSyncTimer.current = setTimeout(() => void loadWeek(), 1500);
   }
 
   async function doTransfer(toMemberId: string) {

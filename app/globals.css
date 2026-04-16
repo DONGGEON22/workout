@@ -22,4 +22,9 @@ body {
   -webkit-tap-highlight-color: transparent;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  touch-action: manipulation; /* 300ms 탭 딜레이 제거 */
+}
+
+* {
+  touch-action: manipulation;
 }

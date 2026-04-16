@@ -207,18 +207,18 @@ export default function HomeClient() {
   }, []);
 
   useEffect(() => {
-    async function checkPush() {
+    async function initPush() {
       if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
       try {
+        // sw-push.js를 명시적으로 등록 (push 핸들러 전용)
+        await navigator.serviceWorker.register("/sw-push.js", { scope: "/" });
         const reg = await navigator.serviceWorker.ready;
         const sub = await reg.pushManager.getSubscription();
         setPushEnabled(!!sub);
       } catch {}
     }
-    void checkPush();
+    void initPush();
   }, []);
-
-  // sw.js(next-pwa)에 push 핸들러 통합 — 별도 sw-push.js 불필요
 
   useEffect(() => {
     if (localStorage.getItem("install_dismissed")) return;

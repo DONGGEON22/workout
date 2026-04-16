@@ -510,10 +510,9 @@ export default function HomeClient() {
               <button
                 type="button"
                 onClick={() => setShowFeedback(true)}
-                className="rounded-full px-3 py-2 text-sm text-stone-400 transition hover:bg-stone-100 hover:text-stone-700"
-                title="의견 보내기"
+                className="flex items-center gap-1.5 rounded-full bg-stone-100 px-3 py-1.5 text-xs font-medium text-stone-500 transition hover:bg-stone-200 hover:text-stone-700"
               >
-                💬
+                💬 의견 보내기
               </button>
               <button
                 type="button"

@@ -45,6 +45,10 @@ export async function GET() {
   const { weekStart, weekEnd } = getActiveWeekBounds();
   const weekIso = weekStart.toISOString();
 
+  // 한국 시간 기준 오늘 00:00 (UTC) — 따봉은 당일만 집계
+  const seoulDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
+  const todaySeoulStart = new Date(seoulDate + "T00:00:00+09:00").toISOString();
+
   const [membersRes, completionsRes, reactionsRes, transfersRes] =
     await Promise.all([
       sb.from("members").select("id, display_name, created_at").order("display_name"),
@@ -55,7 +59,8 @@ export async function GET() {
       sb
         .from("reactions")
         .select("from_member_id, to_member_id, emoji")
-        .eq("week_start", weekIso),
+        .eq("week_start", weekIso)
+        .gte("created_at", todaySeoulStart),
       sb
         .from("workout_transfers")
         .select(

@@ -140,7 +140,6 @@ export default function HomeClient() {
   const [showTransferEffect, setShowTransferEffect] = useState(false);
   const [transferTarget, setTransferTarget] = useState<string | null>(null);
   const [transferBusy, setTransferBusy] = useState(false);
-  const [reactionBusy, setReactionBusy] = useState(false);
   const effectId = useRef(0);
   const prevTransferCount = useRef<number | null>(null);
 
@@ -258,23 +257,35 @@ export default function HomeClient() {
     }
   }
 
-  async function sendReaction(toMemberId: string) {
-    if (reactionBusy) return;
-    setReactionBusy(true);
-    try {
-      const res = await fetch("/api/reactions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to_member_id: toMemberId, emoji: THUMBS }),
-      });
-      if (res.ok) {
-        const id = ++effectId.current;
-        setFloatEffects((p) => [...p, { emoji: THUMBS, id }]);
-      }
-      await loadWeek();
-    } finally {
-      setReactionBusy(false);
-    }
+  function sendReaction(toMemberId: string) {
+    // 낙관적 업데이트 — 즉시 카운트 +1
+    setWeek((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        members: prev.members.map((m) => {
+          if (m.id !== toMemberId) return m;
+          const existing = m.reactions.find((r) => r.emoji === THUMBS);
+          return {
+            ...m,
+            reactions: existing
+              ? m.reactions.map((r) => r.emoji === THUMBS ? { ...r, count: r.count + 1, iMine: true } : r)
+              : [...m.reactions, { emoji: THUMBS, count: 1, iMine: true }],
+          };
+        }),
+      };
+    });
+
+    // float 이펙트
+    const id = ++effectId.current;
+    setFloatEffects((p) => [...p, { emoji: THUMBS, id }]);
+
+    // API 호출 (백그라운드, UI 블로킹 없음)
+    fetch("/api/reactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to_member_id: toMemberId, emoji: THUMBS }),
+    }).then(() => void loadWeek()).catch(() => void loadWeek());
   }
 
   async function doTransfer(toMemberId: string) {
@@ -590,9 +601,8 @@ export default function HomeClient() {
                         {!isMe ? (
                           <button
                             type="button"
-                            disabled={reactionBusy}
-                            onClick={() => void sendReaction(m.id)}
-                            className="flex min-h-[1.75rem] items-center gap-1 rounded-full bg-stone-100 px-2.5 py-1 text-sm font-medium text-stone-600 transition active:scale-95 hover:bg-amber-50 hover:text-amber-600 disabled:opacity-50"
+                            onClick={() => sendReaction(m.id)}
+                            className="flex min-h-[1.75rem] items-center gap-1 rounded-full bg-stone-100 px-2.5 py-1 text-sm font-medium text-stone-600 transition active:scale-95 hover:bg-amber-50 hover:text-amber-600"
                           >
                             {THUMBS}
                             {thumbsCount > 0 ? (

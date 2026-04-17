@@ -708,8 +708,15 @@ export default function HomeClient() {
                           </span>
                         ) : null}
 
-                        {/* 👍 버튼 — 타인만, 누를수록 카운트 누적 */}
-                        {!isMe ? (
+                        {/* 👍 버튼 — 타인은 클릭 가능, 본인은 카운트만 표시 */}
+                        {isMe ? (
+                          thumbsCount > 0 ? (
+                            <span className="flex min-h-[1.75rem] items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-sm text-amber-500">
+                              {THUMBS}
+                              <span className="text-xs tabular-nums font-medium">{thumbsCount}</span>
+                            </span>
+                          ) : null
+                        ) : (
                           <button
                             type="button"
                             onClick={() => sendReaction(m.id)}
@@ -720,7 +727,7 @@ export default function HomeClient() {
                               <span className="text-xs tabular-nums text-stone-500">{thumbsCount}</span>
                             ) : null}
                           </button>
-                        ) : null}
+                        )}
 
                         {/* 💝 양도 버튼 */}
                         {canTransfer ? (

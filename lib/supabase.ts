@@ -35,6 +35,7 @@ export interface Database {
           photo_path: string | null;
           transferred: boolean;
           workout_type: string | null;
+          received_from_member_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -45,6 +46,7 @@ export interface Database {
           photo_path?: string | null;
           transferred?: boolean;
           workout_type?: string | null;
+          received_from_member_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -55,6 +57,7 @@ export interface Database {
           photo_path?: string | null;
           transferred?: boolean;
           workout_type?: string | null;
+          received_from_member_id?: string | null;
           created_at?: string;
         };
         Relationships: [

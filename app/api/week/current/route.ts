@@ -54,7 +54,7 @@ export async function GET() {
       sb.from("members").select("id, display_name, created_at").order("display_name"),
       sb
         .from("workout_completions")
-        .select("id, member_id, week_start, day_index, photo_path, transferred, workout_type, created_at")
+        .select("id, member_id, week_start, day_index, photo_path, transferred, workout_type, received_from_member_id, created_at")
         .eq("week_start", weekIso),
       sb
         .from("reactions")
@@ -77,8 +77,11 @@ export async function GET() {
   // 완료 기록 멤버별 그룹화
   const byMember = new Map<
     string,
-    Array<{ id: string; dayIndex: number; photoUrl: string | null; transferred: boolean; workoutType: string | null; createdAt: string }>
+    Array<{ id: string; dayIndex: number; photoUrl: string | null; transferred: boolean; workoutType: string | null; receivedFromName: string | null; createdAt: string }>
   >();
+
+  // 멤버 id → name 빠른 조회용
+  const memberNameMap = new Map(members.map((m) => [m.id, m.display_name]));
 
   for (const row of completions) {
     const list = byMember.get(row.member_id) ?? [];
@@ -87,12 +90,16 @@ export async function GET() {
       row.photo_path.startsWith(`${WORKOUT_PHOTO_PREFIX}/`)
         ? photoUrlFromStoredPath(row.photo_path)
         : null;
+    const receivedFromName = row.received_from_member_id
+      ? (memberNameMap.get(row.received_from_member_id) ?? null)
+      : null;
     list.push({
       id: row.id,
       dayIndex: row.day_index,
       photoUrl,
       transferred: row.transferred ?? false,
       workoutType: row.workout_type ?? null,
+      receivedFromName,
       createdAt: row.created_at,
     });
     byMember.set(row.member_id, list);

@@ -103,13 +103,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "양도 처리 실패" }, { status: 500 });
   }
 
-  // 상대방 기록 1개 추가
+  // 상대방 기록 1개 추가 (누가 양도했는지 기록)
   const { error: insertError } = await sb.from("workout_completions").insert({
     id: randomUUID(),
     member_id: to_member_id,
     week_start: weekIso,
     day_index: freeDayIndex,
     photo_path: null,
+    received_from_member_id: session.sub,
   });
 
   if (insertError) {

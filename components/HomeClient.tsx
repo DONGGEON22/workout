@@ -21,6 +21,7 @@ type DayCompletion = {
   photoUrl: string | null;
   transferred: boolean;
   workoutType: string | null;
+  receivedFromName: string | null;
   createdAt: string;
 };
 
@@ -773,6 +774,7 @@ export default function HomeClient() {
                       {dayCells.map((c) => {
                         const hit = m.days.find((d) => d.dayIndex === c.dayIndex);
                         const isTransferred = hit?.transferred === true;
+                        const isReceived = !isTransferred && !!hit?.receivedFromName;
                         return (
                           <div key={c.dayIndex} className="flex min-w-0 flex-col items-center gap-1 px-0.5 py-0.5 first:pl-0 last:pr-0">
                             <span className="text-[10px] font-medium leading-none text-stone-400">{c.label}</span>
@@ -780,15 +782,28 @@ export default function HomeClient() {
                               {c.dateLabel}
                             </span>
                             {c.isToday ? <span className="h-1 w-1 shrink-0 rounded-full bg-indigo-500" /> : <span className="h-1 shrink-0" />}
-                            <div className={`relative mt-0.5 flex h-10 w-full max-w-[2.85rem] shrink-0 items-center justify-center rounded-lg sm:h-11 sm:max-w-[3rem] ${
-                              isTransferred
-                                ? "border border-stone-200 bg-stone-100"
-                                : hit
-                                  ? "bg-indigo-100"
-                                  : "border border-stone-100 bg-stone-50"
-                            }`}>
+                            <div
+                              className={`relative mt-0.5 flex h-10 w-full max-w-[2.85rem] shrink-0 items-center justify-center rounded-lg sm:h-11 sm:max-w-[3rem] ${
+                                isTransferred
+                                  ? "border border-dashed border-stone-200 bg-stone-50"
+                                  : isReceived
+                                    ? "bg-pink-100"
+                                    : hit
+                                      ? "bg-indigo-100"
+                                      : "border border-stone-100 bg-stone-50"
+                              }`}
+                            >
                               {isTransferred ? (
-                                <span className="text-[9px] font-medium text-stone-400">양도</span>
+                                <span className="text-[9px] font-medium text-stone-300">양도</span>
+                              ) : isReceived ? (
+                                <button
+                                  type="button"
+                                  onClick={() => showToast(`💝 ${hit!.receivedFromName}님이 양도해줬어요`, "success")}
+                                  className="absolute inset-0 flex items-center justify-center rounded-lg active:bg-pink-200/60"
+                                  aria-label={`${hit!.receivedFromName}님에게 양도받음`}
+                                >
+                                  <span className="text-lg leading-none">💝</span>
+                                </button>
                               ) : hit?.photoUrl ? (
                                 <button
                                   type="button"
@@ -824,17 +839,17 @@ export default function HomeClient() {
           {/* 양도 이력 */}
           {week.transfers.length > 0 ? (
             <div className="mt-4 border-t border-stone-100 pt-3">
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-stone-400">이번 주 양도 이력</p>
-              <ul className="space-y-1">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-stone-400">이번 주 양도 이력</p>
+              <ul className="space-y-1.5">
                 {week.transfers.map((t) => (
                   <li
                     key={`${t.from_member_id}-${t.to_member_id}-${t.created_at}`}
-                    className="text-xs text-stone-500"
+                    className="flex items-center gap-1.5 text-xs"
                   >
-                    <span className="font-medium text-stone-700">{t.from_name}</span>
-                    {" → "}
-                    <span className="font-medium text-stone-700">{t.to_name}</span>
-                    {" 에게 1회 양도 💝"}
+                    <span className="rounded-full bg-stone-100 px-2 py-0.5 font-medium text-stone-600">{t.from_name}</span>
+                    <span className="text-stone-300">→</span>
+                    <span className="rounded-full bg-rose-50 px-2 py-0.5 font-medium text-rose-600">{t.to_name}</span>
+                    <span className="text-stone-400">1회 양도 💝</span>
                   </li>
                 ))}
               </ul>

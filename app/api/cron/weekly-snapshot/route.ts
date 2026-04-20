@@ -13,7 +13,8 @@ async function runSnapshot() {
     sb
       .from("workout_completions")
       .select("member_id")
-      .eq("week_start", weekIso),
+      .eq("week_start", weekIso)
+      .eq("transferred", false),
   ]);
 
   const memberRows = membersRes.data ?? [];

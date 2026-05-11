@@ -6,8 +6,8 @@ import { sendPushToMembers } from "@/lib/push";
 
 function authorizeCron(req: Request) {
   const secret = process.env.CRON_SECRET?.trim();
+  if (!secret) return true; // CRON_SECRET 미설정 시 Vercel 크론 자체 인증에 위임
   const auth = req.headers.get("authorization");
-  if (!secret) return process.env.NODE_ENV === "development";
   return auth === `Bearer ${secret}`;
 }
 
